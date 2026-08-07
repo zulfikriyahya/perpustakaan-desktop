@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "perpustakaan-mtsn1pandeglang",
+  "version": "0.1.0",
+  "identifier": "com.zulfikriyahya.perpustakaan-mtsn1pandeglang",
+  "build": {
+    "beforeDevCommand": "yarn dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "yarn build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Perpustakaan MTsN 1 Pandeglang",
+        "url": "https://perpustakaan.mtsn1pandeglang.sch.id/dashboard/sirkulasi",
+        "width": 1280,
+        "height": 800,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "deb"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    },
+    "category": "Education",
+    "shortDescription": "Aplikasi akses sirkulasi perpustakaan",
+    "longDescription": "Aplikasi desktop untuk mengakses sistem sirkulasi perpustakaan MTsN 1 Pandeglang secara langsung."
+  }
+}
