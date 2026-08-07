@@ -24,6 +24,11 @@ pub fn run() {
                                 | tauri_plugin_global_shortcut::Modifiers::SHIFT,
                             tauri_plugin_global_shortcut::Code::KeyQ,
                         ) {
+                            let state = app.state::<RfidBridgeState>();
+                            let mut guard = state.0.lock().unwrap();
+                            if let Some(child) = guard.take() {
+                                let _ = child.kill();
+                            }
                             app.exit(0);
                         }
                     }
@@ -55,7 +60,8 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { .. } = event {
                 let state = window.state::<RfidBridgeState>();
-                if let Some(child) = state.0.lock().unwrap().take() {
+                let mut guard = state.0.lock().unwrap();
+                if let Some(child) = guard.take() {
                     let _ = child.kill();
                 }
             }
