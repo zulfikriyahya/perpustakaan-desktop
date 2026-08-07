@@ -1,4 +1,6 @@
-use tauri_plugin_autostart::MacosLauncher;
+use tauri::Manager;
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -8,10 +10,31 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    if event.state() == ShortcutState::Pressed {
+                        if shortcut.matches(
+                            tauri_plugin_global_shortcut::Modifiers::CONTROL
+                                | tauri_plugin_global_shortcut::Modifiers::SHIFT,
+                            tauri_plugin_global_shortcut::Code::KeyQ,
+                        ) {
+                            app.exit(0);
+                        }
+                    }
+                })
+                .build(),
+        )
         .setup(|app| {
-            use tauri_plugin_autostart::ManagerExt;
             let autostart_manager = app.autolaunch();
             let _ = autostart_manager.enable();
+
+            app.global_shortcut().register("Ctrl+Shift+Q")?;
+
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_fullscreen(true);
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -15,9 +15,13 @@
         "label": "main",
         "title": "Perpustakaan MTsN 1 Pandeglang",
         "url": "https://perpustakaan.mtsn1pandeglang.sch.id/dashboard/sirkulasi",
-        "width": 1280,
-        "height": 800,
-        "resizable": true
+        "width": 1920,
+        "height": 1080,
+        "fullscreen": true,
+        "decorations": false,
+        "resizable": false,
+        "alwaysOnTop": false,
+        "skipTaskbar": false
       }
     ],
     "security": {
