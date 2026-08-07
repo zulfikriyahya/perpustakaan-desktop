@@ -1,7 +1,10 @@
-use tauri::Manager;
+use std::sync::Mutex;
+use tauri::{Manager, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::{process::CommandChild, ShellExt};
+
+struct RfidBridgeState(Mutex<Option<CommandChild>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -27,6 +30,7 @@ pub fn run() {
                 })
                 .build(),
         )
+        .manage(RfidBridgeState(Mutex::new(None)))
         .setup(|app| {
             let autostart_manager = app.autolaunch();
             let _ = autostart_manager.enable();
@@ -39,11 +43,22 @@ pub fn run() {
 
             let sidecar = app.shell().sidecar("rfid_bridge")
                 .expect("gagal siapkan sidecar rfid_bridge");
-            let (mut _rx, _child) = sidecar
+            let (mut _rx, child) = sidecar
                 .spawn()
                 .expect("gagal menjalankan rfid_bridge");
 
+            let state = app.state::<RfidBridgeState>();
+            *state.0.lock().unwrap() = Some(child);
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { .. } = event {
+                let state = window.state::<RfidBridgeState>();
+                if let Some(child) = state.0.lock().unwrap().take() {
+                    let _ = child.kill();
+                }
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
