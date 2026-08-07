@@ -29,6 +29,46 @@ jobs:
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/appimage/*.AppImage
 
+  build-linux-arm:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        include:
+          - arch: armv7
+            platform: linux/arm/v7
+          - arch: arm64
+            platform: linux/arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build in ARM container
+        run: |
+          docker run --rm --platform ${{ matrix.platform }} \
+            -v ${{ github.workspace }}:/app -w /app \
+            debian:bookworm bash -c "
+              apt update && \
+              apt install -y curl wget file build-essential libwebkit2gtk-4.1-dev \
+                libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
+                nodejs npm && \
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
+              . \$HOME/.cargo/env && \
+              npm install && \
+              npm run tauri build
+            "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}-build
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/appimage/*.AppImage
+
   build-windows-64:
     runs-on: windows-latest
     steps:
