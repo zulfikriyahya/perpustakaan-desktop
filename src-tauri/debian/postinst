@@ -1,0 +1,37 @@
+#!/bin/bash
+set -e
+
+APP_BIN="/usr/bin/perpustakaan-mtsn1pandeglang"
+TARGET_USER="${SUDO_USER:-pi}"
+USER_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
+
+# Setup .xinitrc
+cat > "$USER_HOME/.xinitrc" << EOF
+xset -dpms
+xset s off
+xset s noblank
+while true; do
+  $APP_BIN
+  sleep 2
+done
+EOF
+chown "$TARGET_USER":"$TARGET_USER" "$USER_HOME/.xinitrc"
+
+# Setup .bash_profile untuk auto startx
+if ! grep -q "startx" "$USER_HOME/.bash_profile" 2>/dev/null; then
+  cat >> "$USER_HOME/.bash_profile" << 'EOF'
+if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
+  startx
+fi
+EOF
+  chown "$TARGET_USER":"$TARGET_USER" "$USER_HOME/.bash_profile"
+fi
+
+# Setup auto-login console (kalau raspi-config tersedia)
+if command -v raspi-config &> /dev/null; then
+  raspi-config nonint do_boot_behaviour B2
+fi
+
+echo "Autostart kiosk sudah dikonfigurasi. Reboot untuk mengaktifkan."
+
+exit 0
