@@ -29,33 +29,6 @@ jobs:
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/appimage/*.AppImage
 
-  build-linux-i386:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Enable i386 arch
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt update
-      - name: Install system deps (i386)
-        run: |
-          sudo apt install -y libwebkit2gtk-4.1-dev:i386 build-essential curl wget file libssl-dev:i386 librsvg2-dev:i386 gcc-multilib g++-multilib
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: i686-unknown-linux-gnu
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - run: npm install
-      - name: Build
-        run: npm run tauri build -- --target i686-unknown-linux-gnu
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-i386-build
-          path: |
-            src-tauri/target/i686-unknown-linux-gnu/release/bundle/deb/*.deb
-            src-tauri/target/i686-unknown-linux-gnu/release/bundle/appimage/*.AppImage
-
   build-windows-64:
     runs-on: windows-latest
     steps:
@@ -94,62 +67,8 @@ jobs:
             src-tauri/target/i686-pc-windows-msvc/release/bundle/msi/*.msi
             src-tauri/target/i686-pc-windows-msvc/release/bundle/nsis/*.exe
 
-  build-android:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v5
-        with:
-          distribution: "temurin"
-          java-version: "21"
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install NDK
-        run: sdkmanager --install "ndk;26.1.10909125"
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - run: npm install
-
-      - name: Decode keystore
-        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > $HOME/upload-keystore.jks
-
-      - name: Create keystore.properties
-        run: |
-          cat <<EOF > src-tauri/gen/android/keystore.properties
-          storeFile=$HOME/upload-keystore.jks
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          EOF
-
-      - name: Init Android project
-        run: npx tauri android init
-
-      - name: Build Android
-        env:
-          NDK_HOME: /usr/local/lib/android/sdk/ndk/26.1.10909125
-        run: npx tauri android build
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: android-build
-          path: |
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
-            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/*.aab
-
   release:
-    needs: [build-linux-amd64, build-linux-i386, build-windows-64, build-windows-32, build-android]
+    needs: [build-linux-amd64, build-windows-64, build-windows-32]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -162,10 +81,8 @@ jobs:
         with:
           files: |
             artifacts/linux-amd64-build/**
-            artifacts/linux-i386-build/**
             artifacts/windows-64-build/**
             artifacts/windows-32-build/**
-            artifacts/android-build/**
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           generate_release_notes: true
