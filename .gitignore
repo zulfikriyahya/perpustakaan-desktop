@@ -26,3 +26,6 @@ gen/android
 rfid_bridge_src/target/
 src-tauri/binaries/*
 !src-tauri/binaries/.gitkeep
+rfid_bridge_src/target/
+src-tauri/binaries/*
+!src-tauri/binaries/.gitkeep
