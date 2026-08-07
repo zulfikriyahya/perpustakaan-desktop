@@ -1,11 +1,13 @@
 use tauri::Manager;
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_shell::ShellExt;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             None,
@@ -34,6 +36,12 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_fullscreen(true);
             }
+
+            let sidecar = app.shell().sidecar("rfid_bridge")
+                .expect("gagal siapkan sidecar rfid_bridge");
+            let (mut _rx, _child) = sidecar
+                .spawn()
+                .expect("gagal menjalankan rfid_bridge");
 
             Ok(())
         })

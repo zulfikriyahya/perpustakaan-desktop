@@ -9,6 +9,16 @@
     "core:webview:allow-create-webview-window",
     "autostart:default",
     "global-shortcut:allow-register",
-    "global-shortcut:allow-unregister"
+    "global-shortcut:allow-unregister",
+    "shell:allow-execute",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "binaries/rfid_bridge",
+          "sidecar": true
+        }
+      ]
+    }
   ]
 }
