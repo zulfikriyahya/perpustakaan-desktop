@@ -3,11 +3,11 @@ name: Build
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
   workflow_dispatch:
 
 jobs:
-  build-linux:
+  build-linux-amd64:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -24,50 +24,36 @@ jobs:
         run: npm run tauri build
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-build
+          name: linux-amd64-build
           path: |
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/appimage/*.AppImage
 
-  build-linux-arm:
+  build-linux-i386:
     runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        include:
-          - arch: armv7
-            platform: linux/arm/v7
-          - arch: arm64
-            platform: linux/arm64
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build in ARM container
+      - name: Enable i386 arch
+        run: sudo dpkg --add-architecture i386
+      - name: Install system deps (i386)
         run: |
-          docker run --rm --platform ${{ matrix.platform }} \
-            -v ${{ github.workspace }}:/app -w /app \
-            debian:bookworm bash -c "
-              apt update && \
-              apt install -y curl wget file build-essential libwebkit2gtk-4.1-dev \
-                libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
-                nodejs npm && \
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
-              . \$HOME/.cargo/env && \
-              npm install && \
-              npm run tauri build
-            "
-
+          sudo apt update
+          sudo apt install -y libwebkit2gtk-4.1-dev:i386 build-essential curl wget file libxdo-dev:i386 libssl-dev:i386 libayatana-appindicator3-dev:i386 librsvg2-dev:i386 gcc-multilib g++-multilib
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: i686-unknown-linux-gnu
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install
+      - name: Build
+        run: npm run tauri build -- --target i686-unknown-linux-gnu
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-${{ matrix.arch }}-build
+          name: linux-i386-build
           path: |
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/i686-unknown-linux-gnu/release/bundle/deb/*.deb
+            src-tauri/target/i686-unknown-linux-gnu/release/bundle/appimage/*.AppImage
 
   build-windows-64:
     runs-on: windows-latest
@@ -104,8 +90,8 @@ jobs:
         with:
           name: windows-32-build
           path: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/i686-pc-windows-msvc/release/bundle/msi/*.msi
+            src-tauri/target/i686-pc-windows-msvc/release/bundle/nsis/*.exe
 
   build-android:
     runs-on: ubuntu-22.04
@@ -115,8 +101,8 @@ jobs:
       - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
-          distribution: "temurin"
-          java-version: "21"
+          distribution: 'temurin'
+          java-version: '21'
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -162,7 +148,7 @@ jobs:
             src-tauri/gen/android/app/build/outputs/bundle/universalRelease/*.aab
 
   release:
-    needs: [build-linux, build-windows-64, build-windows-32, build-android]
+    needs: [build-linux-amd64, build-linux-i386, build-windows-64, build-windows-32, build-android]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -174,7 +160,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/linux-build/**
+            artifacts/linux-amd64-build/**
+            artifacts/linux-i386-build/**
             artifacts/windows-64-build/**
             artifacts/windows-32-build/**
             artifacts/android-build/**
