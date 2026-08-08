@@ -9,6 +9,12 @@ struct RfidBridgeState(Mutex<Option<CommandChild>>);
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // fokuskan window yang sudah ada, jangan buka instance baru
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_autostart::init(
@@ -43,7 +49,18 @@ pub fn run() {
             app.global_shortcut().register("Ctrl+Shift+Q")?;
 
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_fullscreen(true);
+                let win = window.clone();
+                let did_fullscreen = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                window.on_window_event(move |event| {
+                    if let WindowEvent::Focused(true) = event {
+                        if !did_fullscreen.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                            if let Err(e) = win.set_fullscreen(true) {
+                                eprintln!("gagal set fullscreen: {e}");
+                                let _ = win.maximize();
+                            }
+                        }
+                    }
+                });
             }
 
             let sidecar = app.shell().sidecar("rfid_bridge")
