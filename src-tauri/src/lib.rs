@@ -1,4 +1,5 @@
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -10,7 +11,6 @@ struct RfidBridgeState(Mutex<Option<CommandChild>>);
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            // fokuskan window yang sudah ada, jangan buka instance baru
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
             }
@@ -30,11 +30,7 @@ pub fn run() {
                                 | tauri_plugin_global_shortcut::Modifiers::SHIFT,
                             tauri_plugin_global_shortcut::Code::KeyQ,
                         ) {
-                            let state = app.state::<RfidBridgeState>();
-                            let mut guard = state.0.lock().unwrap();
-                            if let Some(child) = guard.take() {
-                                let _ = child.kill();
-                            }
+                            kill_sidecar(app);
                             app.exit(0);
                         }
                     }
@@ -50,10 +46,10 @@ pub fn run() {
 
             if let Some(window) = app.get_webview_window("main") {
                 let win = window.clone();
-                let did_fullscreen = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                let did_fullscreen = Arc::new(AtomicBool::new(false));
                 window.on_window_event(move |event| {
                     if let WindowEvent::Focused(true) = event {
-                        if !did_fullscreen.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                        if !did_fullscreen.swap(true, Ordering::SeqCst) {
                             if let Err(e) = win.set_fullscreen(true) {
                                 eprintln!("gagal set fullscreen: {e}");
                                 let _ = win.maximize();
@@ -63,26 +59,31 @@ pub fn run() {
                 });
             }
 
-            let sidecar = app.shell().sidecar("rfid_bridge")
+            let sidecar = app
+                .shell()
+                .sidecar("rfid_bridge")
                 .expect("gagal siapkan sidecar rfid_bridge");
-            let (mut _rx, child) = sidecar
-                .spawn()
-                .expect("gagal menjalankan rfid_bridge");
+            let (mut _rx, child) = sidecar.spawn().expect("gagal menjalankan rfid_bridge");
 
             let state = app.state::<RfidBridgeState>();
             *state.0.lock().unwrap() = Some(child);
 
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { .. } = event {
-                let state = window.state::<RfidBridgeState>();
-                let mut guard = state.0.lock().unwrap();
-                if let Some(child) = guard.take() {
-                    let _ = child.kill();
-                }
+        .on_window_event(|window, event| match event {
+            WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed => {
+                kill_sidecar(window.app_handle());
             }
+            _ => {}
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+fn kill_sidecar(app: &tauri::AppHandle) {
+    let state = app.state::<RfidBridgeState>();
+    let mut guard = state.0.lock().unwrap();
+    if let Some(child) = guard.take() {
+        let _ = child.kill();
+    }
 }

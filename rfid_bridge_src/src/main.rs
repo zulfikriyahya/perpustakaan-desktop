@@ -3,6 +3,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::time::Duration;
 use std::thread;
 use enigo::{Enigo, Keyboard, Settings};
+
 fn find_esp32_port() -> Option<String> {
     let ports = serialport::available_ports().ok()?;
     for p in &ports {
@@ -31,6 +32,7 @@ fn find_esp32_port() -> Option<String> {
         }
     })
 }
+
 fn connect_loop(verbose: bool) -> Box<dyn SerialPort> {
     loop {
         if let Some(port_name) = find_esp32_port() {
@@ -56,7 +58,15 @@ fn connect_loop(verbose: bool) -> Box<dyn SerialPort> {
         thread::sleep(Duration::from_millis(1000));
     }
 }
+
 fn main() {
+    // Pastikan proses ini otomatis mati kalau parent process (app Tauri)
+    // mati dengan cara apapun, termasuk kill -9.
+    #[cfg(target_os = "linux")]
+    unsafe {
+        libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+    }
+
     let verbose = std::env::args().any(|a| a == "--verbose" || a == "-v");
     let settings = Settings::default();
     let mut enigo = match Enigo::new(&settings) {
@@ -68,6 +78,7 @@ fn main() {
             std::process::exit(1);
         }
     };
+
     loop {
         let port = connect_loop(verbose);
         let mut reader = BufReader::new(port);
