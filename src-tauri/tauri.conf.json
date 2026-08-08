@@ -15,7 +15,7 @@
         "label": "main",
         "title": "Perpustakaan MTsN 1 Pandeglang",
         "url": "https://perpustakaan.mtsn1pandeglang.sch.id/dashboard/sirkulasi",
-        "maximized": true,
+        "fullscreen": true,
         "decorations": false,
         "resizable": false,
         "alwaysOnTop": false,
