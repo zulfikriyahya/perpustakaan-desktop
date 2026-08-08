@@ -29,3 +29,5 @@ src-tauri/binaries/*
 rfid_bridge_src/target/
 src-tauri/binaries/*
 !src-tauri/binaries/.gitkeep
+src-tauri/binaries/*
+tauri/binaries/.gitkeep
