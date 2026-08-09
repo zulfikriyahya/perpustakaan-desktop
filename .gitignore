@@ -23,15 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 gen/android
-rfid_bridge_src/target/
-src-tauri/binaries/*
 !src-tauri/binaries/.gitkeep
-rfid_bridge_src/target/
-src-tauri/binaries/*
-!src-tauri/binaries/.gitkeep
-src-tauri/binaries/*
 tauri/binaries/.gitkeep
 src-tauri/target/
 rfid_bridge_src/target/
-src-tauri/binaries/*
 tauri/binaries/.gitkeep

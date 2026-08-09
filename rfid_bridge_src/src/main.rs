@@ -1,8 +1,9 @@
 use serialport::{SerialPort, SerialPortType};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{self, BufRead, BufReader, Write};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::thread;
-use enigo::{Enigo, Keyboard, Settings};
+use enigo::{Button, Coordinate, Direction, Enigo, Keyboard, Mouse, Settings};
 
 fn find_esp32_port() -> Option<String> {
     let ports = serialport::available_ports().ok()?;
@@ -59,6 +60,60 @@ fn connect_loop(verbose: bool) -> Box<dyn SerialPort> {
     }
 }
 
+// Thread terpisah: baca perintah dari stdin (dikirim src-tauri lewat
+// CommandChild::write) untuk memicu klik mouse sintetis. Dipakai supaya
+// browser menganggap fokus ke form input sebagai aktivasi asli dari
+// pengguna, bukan panggilan JavaScript (yang diblokir untuk autofocus
+// cross-origin iframe). Enigo instance dibagi lewat Mutex dengan loop RFID
+// utama supaya tidak ada dua kontrol input yang berebut.
+//
+// Format perintah (satu baris, dipisah newline): "CLICK <x> <y>"
+fn spawn_stdin_command_listener(enigo: Arc<Mutex<Enigo>>, verbose: bool) {
+    thread::spawn(move || {
+        let stdin = io::stdin();
+        for line in stdin.lock().lines() {
+            let Ok(line) = line else { break };
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            let mut parts = line.split_whitespace();
+            match parts.next() {
+                Some("CLICK") => {
+                    let coords = (
+                        parts.next().and_then(|v| v.parse::<i32>().ok()),
+                        parts.next().and_then(|v| v.parse::<i32>().ok()),
+                    );
+                    if let (Some(x), Some(y)) = coords {
+                        let mut guard = match enigo.lock() {
+                            Ok(g) => g,
+                            Err(e) => {
+                                if verbose {
+                                    eprintln!("gagal lock enigo untuk CLICK: {e}");
+                                }
+                                continue;
+                            }
+                        };
+                        let _ = guard.move_mouse(x, y, Coordinate::Abs);
+                        let _ = guard.button(Button::Left, Direction::Click);
+                        if verbose {
+                            println!("CLICK dieksekusi di ({x}, {y})");
+                        }
+                    } else if verbose {
+                        eprintln!("perintah CLICK tidak valid: {line}");
+                    }
+                }
+                _ => {
+                    if verbose {
+                        eprintln!("perintah stdin tidak dikenal: {line}");
+                    }
+                }
+            }
+        }
+    });
+}
+
 fn main() {
     // Pastikan proses ini otomatis mati kalau parent process (app Tauri)
     // mati dengan cara apapun, termasuk kill -9.
@@ -69,8 +124,8 @@ fn main() {
 
     let verbose = std::env::args().any(|a| a == "--verbose" || a == "-v");
     let settings = Settings::default();
-    let mut enigo = match Enigo::new(&settings) {
-        Ok(e) => e,
+    let enigo = match Enigo::new(&settings) {
+        Ok(e) => Arc::new(Mutex::new(e)),
         Err(e) => {
             if verbose {
                 eprintln!("Gagal inisialisasi Enigo: {}", e);
@@ -78,6 +133,12 @@ fn main() {
             std::process::exit(1);
         }
     };
+
+    // TODO: verifikasi signature terhadap versi crate enigo 0.2 yang terpasang -
+    // khususnya apakah Enigo Send+Sync di target platform (Linux/Windows) untuk
+    // dibagi via Arc<Mutex<_>> antar thread. Berdasarkan dokumentasi enigo 0.2
+    // ini didukung, tapi belum diverifikasi end-to-end di device fisik.
+    spawn_stdin_command_listener(Arc::clone(&enigo), verbose);
 
     loop {
         let port = connect_loop(verbose);
@@ -99,8 +160,10 @@ fn main() {
                         let _ = std::io::stdout().write_all(uid.as_bytes());
                         let _ = std::io::stdout().write_all(b"\n");
                     }
-                    let _ = enigo.text(uid);
-                    let _ = enigo.key(enigo::Key::Return, enigo::Direction::Click);
+                    if let Ok(mut guard) = enigo.lock() {
+                        let _ = guard.text(uid);
+                        let _ = guard.key(enigo::Key::Return, enigo::Direction::Click);
+                    }
                 }
                 Err(e) => {
                     if e.kind() != std::io::ErrorKind::TimedOut {

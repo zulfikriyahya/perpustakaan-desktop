@@ -25,6 +25,15 @@ struct CirculationStatus {
     url: String,
 }
 
+// TODO: ASUMSI - "reachable"/"tidak error" didefinisikan sebagai status 2xx
+// saja (sebelumnya: apa saja selain 5xx). Ini artinya 4xx (404/403/dst)
+// sekarang juga dianggap error dan memicu splash+reload otomatis. Kalau web
+// app sirkulasi punya endpoint yang sengaja balas 4xx dalam kondisi normal,
+// definisi ini perlu direvisi.
+fn is_reachable_status(status: reqwest::StatusCode) -> bool {
+    status.is_success()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -68,6 +77,16 @@ pub fn run() {
                         return;
                     }
 
+                    // F5 - TODO: ASUMSI - shortcut tambahan (bukan pengganti Ctrl+Shift+R)
+                    // untuk trigger reload yang sama.
+                    if shortcut.matches(
+                        tauri_plugin_global_shortcut::Modifiers::empty(),
+                        tauri_plugin_global_shortcut::Code::F5,
+                    ) {
+                        let _ = app.emit_to("main", "force-reload", ());
+                        return;
+                    }
+
                     // Ctrl+Shift+U - buka form ganti URL sirkulasi
                     if shortcut.matches(
                         tauri_plugin_global_shortcut::Modifiers::CONTROL
@@ -80,13 +99,18 @@ pub fn run() {
                 .build(),
         )
         .manage(RfidBridgeState(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![check_url_reachable])
+        .invoke_handler(tauri::generate_handler![
+    check_url_reachable,
+    request_focus,
+    send_activation_click
+])
         .setup(|app| {
             let autostart_manager = app.autolaunch();
             let _ = autostart_manager.enable();
 
             app.global_shortcut().register("Ctrl+Shift+W")?;
             app.global_shortcut().register("Ctrl+Shift+R")?;
+            app.global_shortcut().register("F5")?;
             app.global_shortcut().register("Ctrl+Shift+U")?;
 
             if let Some(window) = app.get_webview_window("main") {
@@ -103,7 +127,15 @@ pub fn run() {
                     }
                 });
             }
-
+            let focus_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                for delay_secs in [1, 3, 6] {
+                    tokio::time::sleep(Duration::from_secs(delay_secs)).await;
+                    if let Some(window) = focus_handle.get_webview_window("main") {
+                        let _ = window.set_focus();
+                    }
+                }
+            });
             let sidecar = app
                 .shell()
                 .sidecar("rfid_bridge")
@@ -135,8 +167,6 @@ fn kill_sidecar(app: &tauri::AppHandle) {
     }
 }
 
-// Command dipanggil dari frontend (JS) untuk cek apakah sebuah URL reachable
-// sebelum ditampilkan di iframe. Dipakai juga saat operator menyimpan URL baru.
 #[tauri::command]
 async fn check_url_reachable(url: String) -> Result<bool, String> {
     let client = reqwest::Client::builder()
@@ -145,15 +175,38 @@ async fn check_url_reachable(url: String) -> Result<bool, String> {
         .map_err(|e| e.to_string())?;
 
     match client.get(&url).send().await {
-        Ok(resp) => Ok(!resp.status().is_server_error()),
+        Ok(resp) => Ok(is_reachable_status(resp.status())),
         Err(_) => Ok(false),
     }
 }
 
-// Polling periodik membaca URL tersimpan dari store, cek reachability, dan
-// mengirim event "circulation-status" ke frontend. Frontend yang menentukan
-// tampilan (splash/config vs iframe) berdasarkan event ini - Rust tidak lagi
-// memanggil reload/eval window secara langsung.
+#[tauri::command]
+fn request_focus(app: tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_focus();
+    }
+}
+
+// Kirim perintah "CLICK x y" ke sidecar rfid_bridge lewat stdin - sidecar
+// yang akan mengeksekusi klik mouse sintetis via enigo. Dipakai untuk
+// memberi "aktivasi pengguna" asli agar browser mengizinkan fokus ke form
+// input di iframe cross-origin (autofocus JS biasa diblokir browser untuk
+// kasus ini).
+//
+// TODO: verifikasi signature CommandChild::write terhadap versi
+// tauri-plugin-shell 2.3.5 yang terpasang - method dan error type di sini
+// diasumsikan dari dokumentasi umum, belum diverifikasi lewat build aktual.
+#[tauri::command]
+fn send_activation_click(app: tauri::AppHandle, x: i32, y: i32) -> Result<(), String> {
+    let state = app.state::<RfidBridgeState>();
+    let mut guard = state.0.lock().unwrap();
+    if let Some(child) = guard.as_mut() {
+        let cmd = format!("CLICK {} {}\n", x, y);
+        child.write(cmd.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 fn spawn_health_check_monitor(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         let client = match reqwest::Client::builder()
@@ -183,12 +236,11 @@ fn spawn_health_check_monitor(app: tauri::AppHandle) {
             };
 
             let Some(url) = url else {
-                // Belum ada URL tersimpan - tidak ada yang dimonitor.
                 continue;
             };
 
             let reachable = match client.get(&url).send().await {
-                Ok(resp) => !resp.status().is_server_error(),
+                Ok(resp) => is_reachable_status(resp.status()),
                 Err(_) => false,
             };
 
@@ -202,8 +254,6 @@ fn spawn_health_check_monitor(app: tauri::AppHandle) {
                 eprintln!("koneksi ke {} pulih", url);
             }
 
-            // Kirim status tiap siklus supaya frontend selalu sinkron, meski
-            // tidak berubah - biaya kecil, menyederhanakan state di JS.
             let _ = app.emit_to(
                 "main",
                 "circulation-status",

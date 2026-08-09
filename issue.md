@@ -106,7 +106,8 @@ Ketentuan:
 
 - tambahkan shortcut refresh (Tombol F5 atau Ctrl + Shift + R)
 - Ubah Tombol Keluar (Ctrl + Shift + W)
-- Tambahkan Fitur Auto Refresh Jika Server Berstatus 500x
+- Tambahkan Fitur Auto Refresh Jika Server Berstatus 500x 400x dan stuck tanpa jaringan
+- perbaiki agar selalu auto fokus pada form isian halaman
 
 ---
 
