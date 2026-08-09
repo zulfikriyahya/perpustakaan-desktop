@@ -1,43 +1,25 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="stylesheet" href="/src/styles.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
-    <script type="module" src="/src/main.ts" defer></script>
-  </head>
+<html lang="id">
 
-  <body>
-    <main class="container">
-      <h1>Welcome to Tauri</h1>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Perpustakaan MTsN 1 Pandeglang</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
 
-      <div class="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/src/assets/vite.svg" class="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img
-            src="/src/assets/tauri.svg"
-            class="logo tauri"
-            alt="Tauri logo"
-          />
-        </a>
-        <a href="https://www.typescriptlang.org/docs" target="_blank">
-          <img
-            src="/src/assets/typescript.svg"
-            class="logo typescript"
-            alt="typescript logo"
-          />
-        </a>
-      </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
+<body>
+  <div id="splash">
+    <p id="status-text">Memuat...</p>
+    <form id="url-form">
+      <label for="url-input">Alamat sistem sirkulasi</label>
+      <input id="url-input" type="url" placeholder="https://perpustakaan.mtsn1pandeglang.sch.id/dashboard/sirkulasi"
+        required />
+      <button type="submit">Simpan &amp; Sambungkan</button>
+    </form>
+  </div>
+  <iframe id="content-frame" title="Sistem Sirkulasi" allow="downloads; clipboard-read; clipboard-write"></iframe>
+  <script type="module" src="/src/main.ts"></script>
+</body>
 
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-msg"></p>
-    </main>
-  </body>
 </html>
